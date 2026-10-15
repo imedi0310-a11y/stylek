@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cameraErrorKey, cameraUnavailableReason } from "@/lib/tryon/camera";
 import { protectedFaceEllipse, insideEllipse, guideTransform, type FaceKeypoints } from "@/lib/tryon/geometry";
-import { fitWithin, ImageInputError, sniffImageType, validateImageFile, MAX_FILE_BYTES } from "@/lib/tryon/image";
+import { ACCEPT_ATTRIBUTE, fitWithin, ImageInputError, sniffImageType, validateImageFile, MAX_FILE_BYTES } from "@/lib/tryon/image";
 import { applyHairTint, HAIR_TONES } from "@/lib/tryon/tint";
 import { barberCardRows, barberCardText, sanitizeNote } from "@/lib/barberCard";
 import { getHairstyleBySlug } from "@/data/hairstyles";
@@ -34,6 +34,15 @@ describe("image validation", () => {
     await expect(validateImageFile(fakeFile(new TextEncoder().encode("hello world!"), "image/jpeg"))).rejects.toBeInstanceOf(ImageInputError);
     await expect(validateImageFile(fakeFile(JPEG, "image/jpeg", MAX_FILE_BYTES + 1))).rejects.toMatchObject({ key: "file.tooLarge" });
     await expect(validateImageFile(fakeFile(PNG, "image/png"))).resolves.toBeUndefined();
+    // Android pickers may report JPEGs as "image/jpg" or leave the type empty; the bytes decide.
+    await expect(validateImageFile(fakeFile(JPEG, "image/jpg"))).resolves.toBeUndefined();
+    await expect(validateImageFile(fakeFile(WEBP, ""))).resolves.toBeUndefined();
+  });
+
+  it("accept attribute lists JPG, JPEG, PNG and WEBP", () => {
+    for (const part of ["image/jpeg", "image/png", "image/webp", ".jpg", ".jpeg", ".png", ".webp"]) {
+      expect(ACCEPT_ATTRIBUTE.split(",")).toContain(part);
+    }
   });
 
   it("downscales large photos proportionally", () => {

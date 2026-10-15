@@ -200,6 +200,7 @@ export const en = {
   "tryon.confirmTitle": "Check your photo",
   "tryon.confirmDesc": "Use a front-facing photo in good light with your hair visible. Nothing is uploaded.",
   "tryon.photoReady": "Photo ready",
+  "tryon.preparingPhoto": "Preparing your photo…",
   "tryon.photoTips": "Tip: face the camera, keep your forehead and hairline visible, avoid hats and strong shadows.",
   "tryon.noPhoto": "Add a photo to begin",
   "tryon.noPhotoDesc": "Take a selfie or choose an image (JPEG, PNG or WebP, up to {max} MB).",

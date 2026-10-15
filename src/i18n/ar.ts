@@ -202,6 +202,7 @@ export const ar: Record<MessageKey, string> = {
   "tryon.confirmTitle": "تحقق من صورتك",
   "tryon.confirmDesc": "استخدم صورة أمامية بإضاءة جيدة مع ظهور شعرك. لا يتم رفع أي شيء.",
   "tryon.photoReady": "الصورة جاهزة",
+  "tryon.preparingPhoto": "جارٍ تجهيز صورتك…",
   "tryon.photoTips": "نصيحة: انظر إلى الكاميرا، واترك الجبهة وخط الشعر ظاهرين، وتجنب القبعات والظلال القوية.",
   "tryon.noPhoto": "أضف صورة للبدء",
   "tryon.noPhotoDesc": "التقط صورة سيلفي أو اختر صورة (JPEG أو PNG أو WebP، حتى {max} ميغابايت).",

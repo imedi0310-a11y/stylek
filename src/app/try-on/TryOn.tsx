@@ -24,13 +24,14 @@ import type { MessageKey } from "@/i18n/messages";
 import { cameraEnvironment, cameraUnavailableReason, type CameraErrorKey } from "@/lib/tryon/camera";
 import { composeReference, ENGINE_KIND, EngineError, runGuideEngine, runToneEngine, type EngineId } from "@/lib/tryon/engines";
 import {
-  ACCEPTED_TYPES,
+  ACCEPT_ATTRIBUTE,
   canvasToBlob,
   fileToCanvas,
   ImageInputError,
   MAX_FILE_MB,
   MIN_DIMENSION,
   releaseCanvas,
+  validateImageFile,
 } from "@/lib/tryon/image";
 import { HAIR_TONES, type HairTone } from "@/lib/tryon/tint";
 import type { Category } from "@/lib/types";
@@ -77,6 +78,8 @@ export function TryOn() {
   const initialStyle = getHairstyleBySlug(searchParams.get("style") ?? "");
 
   const [pending, setPending] = useState<Photo | null>(null);
+  // Blob URL of a selected file that is still being decoded, shown straight away as a preview.
+  const [preparing, setPreparing] = useState<string | null>(null);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [category, setCategory] = useState<Category | "all">(initialStyle?.category ?? "all");
@@ -91,14 +94,17 @@ export function TryOn() {
   const nativeCameraRef = useRef<HTMLInputElement>(null);
   const referenceRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  // Incremented on every new selection so a slow decode can't overwrite a newer one.
+  const selection = useRef(0);
   // Keep the latest objects in refs so the unmount cleanup releases them.
-  const live = useRef({ pending, photo, result });
+  const live = useRef({ pending, photo, result, preparing });
   useEffect(() => {
-    live.current = { pending, photo, result };
-  }, [pending, photo, result]);
+    live.current = { pending, photo, result, preparing };
+  }, [pending, photo, result, preparing]);
 
   useEffect(
     () => () => {
+      if (live.current.preparing) URL.revokeObjectURL(live.current.preparing);
       disposePhoto(live.current.pending);
       disposePhoto(live.current.photo);
       if (live.current.result) URL.revokeObjectURL(live.current.result.url);
@@ -120,22 +126,56 @@ export function TryOn() {
     setStatus({ kind: "idle" });
   }, []);
 
-  const acceptCanvas = useCallback(async (canvas: HTMLCanvasElement) => {
-    const next = await toPhoto(canvas);
+  const showPending = useCallback((next: Photo) => {
     setPending((current) => {
       disposePhoto(current);
       return next;
     });
   }, []);
 
+  /** Drops a preview that is still decoding (its URL is revoked unless it was handed to `pending`). */
+  const cancelPreparing = useCallback((revoke: boolean) => {
+    selection.current += 1;
+    setPreparing((current) => {
+      if (current && revoke) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, []);
+
+  const acceptCanvas = useCallback(
+    async (canvas: HTMLCanvasElement) => {
+      cancelPreparing(true);
+      showPending(await toPhoto(canvas));
+    },
+    [cancelPreparing, showPending],
+  );
+
   const onFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    // Reset so choosing the same image again still fires a change event (Android included).
     event.target.value = "";
     setInputError(null);
     if (!file) return;
+    cancelPreparing(true);
+    const id = selection.current;
     try {
-      await acceptCanvas(await fileToCanvas(file));
+      // Cheap checks first, then show the photo immediately: decoding a full-size
+      // phone photo can take seconds on mid-range Android devices.
+      await validateImageFile(file);
+      if (id !== selection.current) return;
+      const url = URL.createObjectURL(file);
+      setPreparing(url);
+      const canvas = await fileToCanvas(file);
+      if (id !== selection.current) {
+        releaseCanvas(canvas);
+        return;
+      }
+      // The preview URL now belongs to the pending photo.
+      cancelPreparing(false);
+      showPending({ canvas, url });
     } catch (error) {
+      if (id !== selection.current) return;
+      cancelPreparing(true);
       const key = error instanceof ImageInputError ? error.key : "file.decodeFailed";
       setInputError(t(key, { max: MAX_FILE_MB, min: MIN_DIMENSION }));
     }
@@ -180,6 +220,7 @@ export function TryOn() {
   };
 
   const removePhoto = () => {
+    cancelPreparing(true);
     clearResult();
     disposePhoto(photo);
     disposePhoto(pending);
@@ -269,7 +310,7 @@ export function TryOn() {
       <input
         ref={galleryRef}
         type="file"
-        accept={ACCEPTED_TYPES.join(",")}
+        accept={ACCEPT_ATTRIBUTE}
         className="sr-only"
         tabIndex={-1}
         aria-hidden
@@ -279,7 +320,7 @@ export function TryOn() {
       <input
         ref={nativeCameraRef}
         type="file"
-        accept={ACCEPTED_TYPES.join(",")}
+        accept={ACCEPT_ATTRIBUTE}
         capture="user"
         className="sr-only"
         tabIndex={-1}
@@ -294,7 +335,21 @@ export function TryOn() {
           {t("tryon.step1")}
         </h2>
 
-        {pending ? (
+        {preparing ? (
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,240px)_1fr]" data-testid="photo-preparing">
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element -- in-memory blob URL */}
+              <img src={preparing} alt={t("tryon.yourPhoto")} className="w-full rounded-2xl border border-line object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/30">
+                <Loader2 aria-hidden className="h-8 w-8 animate-spin text-white" />
+              </div>
+            </div>
+            <p className="flex items-center gap-2 text-sm text-ink-soft" role="status">
+              <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+              {t("tryon.preparingPhoto")}
+            </p>
+          </div>
+        ) : pending ? (
           <div className="grid gap-4 sm:grid-cols-[minmax(0,240px)_1fr]">
             {/* eslint-disable-next-line @next/next/no-img-element -- in-memory blob URL */}
             <img src={pending.url} alt={t("tryon.yourPhoto")} className="w-full rounded-2xl border border-line object-cover" />
