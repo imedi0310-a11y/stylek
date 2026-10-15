@@ -202,6 +202,7 @@ export const fr: Record<MessageKey, string> = {
   "tryon.confirmTitle": "Vérifiez votre photo",
   "tryon.confirmDesc": "Utilisez une photo de face, bien éclairée, cheveux visibles. Rien n'est envoyé.",
   "tryon.photoReady": "Photo prête",
+  "tryon.preparingPhoto": "Préparation de votre photo…",
   "tryon.photoTips": "Astuce : regardez l'objectif, gardez le front et la ligne des cheveux visibles, évitez chapeaux et ombres marquées.",
   "tryon.noPhoto": "Ajoutez une photo pour commencer",
   "tryon.noPhotoDesc": "Prenez un selfie ou choisissez une image (JPEG, PNG ou WebP, jusqu'à {max} Mo).",

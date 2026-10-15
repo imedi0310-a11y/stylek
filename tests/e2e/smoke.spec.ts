@@ -166,4 +166,41 @@ test.describe("try-on", () => {
     await expect(page.locator("main [role=alert]")).toContainText(/No face was detected|Could not load the on-device model/, { timeout: 30_000 });
     await expect(page.getByTestId("tryon-result")).toHaveCount(0);
   });
+
+  test("selected photo previews immediately and the same image can be chosen again", async ({ page }) => {
+    const jpeg = await page.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 3000;
+      c.height = 4000;
+      const ctx = c.getContext("2d")!;
+      ctx.fillStyle = "#a87";
+      ctx.fillRect(0, 0, c.width, c.height);
+      const blob = await new Promise<Blob>((resolve) => c.toBlob((b) => resolve(b!), "image/jpeg", 0.9));
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    });
+    const file = { name: "IMG_2041.jpg", mimeType: "image/jpeg", buffer: Buffer.from(jpeg) };
+    await page.goto("/try-on");
+    await choose(page, file);
+    await expect(page.locator("main img").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Check your photo" })).toBeVisible();
+    await page.getByRole("button", { name: "Remove Photo" }).click();
+    await choose(page, file);
+    await expect(page.getByRole("heading", { name: "Check your photo" })).toBeVisible();
+    // Re-selecting the identical file from the confirm screen must not be ignored.
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Change Photo" }).click();
+    await (await chooser).setFiles(file);
+    await expect(page.getByRole("heading", { name: "Check your photo" })).toBeVisible();
+    await expect(page.locator("main [role=alert]")).toHaveCount(0);
+  });
+
+  test("upload errors are shown in Arabic", async ({ page }) => {
+    await page.goto("/try-on");
+    await page.getByLabel("Language").selectOption("ar");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "اختر من المعرض" }).click();
+    await (await chooser).setFiles({ name: "x.gif", mimeType: "image/gif", buffer: Buffer.from("GIF89a") });
+    await expect(page.locator("main [role=alert]")).toContainText("نوع الملف غير مدعوم");
+  });
 });

@@ -1,6 +1,13 @@
 import type { MessageKey } from "@/i18n/messages";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+/** Some Android pickers and file managers report JPEG files as "image/jpg". */
+const TYPE_ALIASES: readonly string[] = [...ACCEPTED_TYPES, "image/jpg", "image/pjpeg"];
+/**
+ * Value for <input accept>. Listing the extensions as well as the MIME types lets
+ * Android file managers that don't know a file's MIME type still offer .jpg/.jpeg/.png/.webp.
+ */
+export const ACCEPT_ATTRIBUTE = [...ACCEPTED_TYPES, ".jpg", ".jpeg", ".png", ".webp"].join(",");
 export const MAX_FILE_MB = 15;
 export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 export const MIN_DIMENSION = 200;
@@ -39,7 +46,7 @@ export function sniffImageType(bytes: Uint8Array): (typeof ACCEPTED_TYPES)[numbe
 /** Validates declared type, size and real content type. Throws ImageInputError. */
 export async function validateImageFile(file: File | null | undefined): Promise<void> {
   if (!file) throw new ImageInputError("file.cancelled");
-  if (file.type && !(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
+  if (file.type && !TYPE_ALIASES.includes(file.type.toLowerCase())) {
     throw new ImageInputError("file.invalidType");
   }
   if (file.size > MAX_FILE_BYTES) throw new ImageInputError("file.tooLarge");
