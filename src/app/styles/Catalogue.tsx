@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RotateCcw, Search, SearchX, SlidersHorizontal } from "lucide-react";
 import { hairstyles } from "@/data/hairstyles";
@@ -34,20 +34,36 @@ export function Catalogue() {
   const searchId = useId();
   const [showFilters, setShowFilters] = useState(false);
 
-  const urlFilters = useMemo(() => filtersFromParams(new URLSearchParams(searchParams.toString())), [searchParams]);
-  // The search box keeps its own state so typing stays responsive while the URL catches up.
-  const [query, setQuery] = useState(urlFilters.query);
-  const filters = useMemo(() => ({ ...urlFilters, query }), [urlFilters, query]);
+  const paramsString = searchParams.toString();
+  // Filters live in local state so every change applies immediately; the URL is
+  // updated asynchronously by router.replace and would be stale between changes.
+  const [filters, setFilters] = useState<StyleFilters>(() => filtersFromParams(new URLSearchParams(paramsString)));
+  // Query strings this component wrote and hasn't seen come back from the router yet.
+  const written = useRef<string[]>([]);
+
+  // Follow URL changes that didn't come from this component (links, back/forward).
+  useEffect(() => {
+    const index = written.current.indexOf(paramsString);
+    if (index >= 0) {
+      written.current = written.current.slice(index + 1);
+      return;
+    }
+    written.current = [];
+    setFilters(filtersFromParams(new URLSearchParams(paramsString)));
+  }, [paramsString]);
+
   const results = useMemo(() => filterHairstyles(hairstyles, filters, locale), [filters, locale]);
   const active = countActiveFilters(filters);
 
   const update = useCallback(
     (next: StyleFilters) => {
-      setQuery(next.query);
+      setFilters(next);
       const params = filtersToParams(next).toString();
+      // An unchanged URL never comes back from the router, so don't wait for it.
+      if (params !== (written.current.at(-1) ?? paramsString)) written.current.push(params);
       router.replace(params ? `${pathname}?${params}` : pathname, { scroll: false });
     },
-    [pathname, router],
+    [pathname, paramsString, router],
   );
 
   const toggleValue = (key: ListKey, value: string) => {
