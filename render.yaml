@@ -1,0 +1,18 @@
+# Render Blueprint — free web service running the Next.js production server.
+services:
+  - type: web
+    name: stylek
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      # Optional: set to your public URL (e.g. https://stylek.onrender.com) for sitemap/Open Graph links.
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
