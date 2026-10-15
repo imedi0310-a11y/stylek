@@ -38,6 +38,42 @@ test.describe("core pages", () => {
     await noHorizontalOverflow(page);
   });
 
+  test("a filter clicked just before typing a search is kept", async ({ page }) => {
+    // Slow the router's server round-trip so the URL update is still in flight while typing.
+    await page.route("**/styles**", async (route) => {
+      if (route.request().headers()["rsc"]) await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+    await page.goto("/styles?category=men");
+    const status = page.getByRole("status").filter({ hasText: /styles?$/ });
+    await expect(status).toHaveText("19 styles");
+    await page.getByRole("button", { name: "Women", exact: true }).click();
+    await page.getByRole("searchbox").fill("bob");
+    await expect(page.getByRole("button", { name: "Women", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("heading", { name: "Classic Bob" })).toBeVisible();
+    await expect(page).toHaveURL(/category=women/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/q=bob/);
+    // Once the delayed navigations land, the selection must still be intact.
+    await page.waitForTimeout(2000);
+    await expect(page.getByRole("button", { name: "Women", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("searchbox")).toHaveValue("bob");
+  });
+
+  test("catalogue follows URL changes made by in-app links", async ({ page }) => {
+    await page.goto("/styles?category=women&q=bob");
+    await expect(page.getByRole("searchbox")).toHaveValue("bob");
+    const status = page.getByRole("status").filter({ hasText: /styles?$/ });
+    // Client-side navigation to the unfiltered catalogue (same page component, new search params).
+    await page.evaluate(() => {
+      const link = [...document.querySelectorAll<HTMLAnchorElement>('a[href="/styles"]')].find((a) => a.offsetParent);
+      link?.click();
+    });
+    await expect(page).toHaveURL(/\/styles$/);
+    await expect(page.getByRole("searchbox")).toHaveValue("");
+    await expect(status).toHaveText("38 styles");
+    await expect(page.getByRole("button", { name: "All", exact: true })).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("favorites persist after refresh", async ({ page }) => {
     await page.goto("/styles/pixie-cut");
     await page.getByRole("button", { name: "Save to favorites", exact: true }).click();
